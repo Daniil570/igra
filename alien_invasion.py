@@ -8,6 +8,7 @@ import game_functions as gf
 from game_stats import GameStats
 from scoreboard import Scoreboard
 from button import Button
+from boss import Boss
 
 
 def run_game():
@@ -24,10 +25,13 @@ def run_game():
     ship = Ship(ai_settings, screen)
     bullets = Group()
     aliens = Group()
-    gf.create_fleet(ai_settings, screen, ship, aliens)
-
+    boss = Group()
+    bg = pygame.image.load('pixel.png').convert_alpha()
+    gf.create_fleet(ai_settings, screen, ship, aliens, stats)
+ 
 
     while True:
+        screen.blit(bg, (0,0))
         gf.check_events(ai_settings, screen, stats, sb, play_button, ship, aliens, bullets)
         if stats.game_active:
             ship.update()

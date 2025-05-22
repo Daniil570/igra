@@ -2,6 +2,8 @@ import sys
 import pygame
 from bullet import Bullet
 from alien import Alien
+from boss import Boss
+from game_stats import GameStats
 from time import sleep
 
 
@@ -25,7 +27,7 @@ def ship_hit(ai_settings, screen, stats, sb, ship, aliens, bullets):
         pygame.mouse.set_visible(True)
     aliens.empty()
     bullets.empty()
-    create_fleet(ai_settings, screen, ship, aliens)
+    create_fleet(ai_settings, screen, ship, aliens, stats)
     ship.center_ship()
     
 
@@ -70,26 +72,50 @@ def create_alien(ai_settings, screen, aliens, alien_number, row_number):
     alien.rect.y = alien.rect.height + 2 * alien.rect.height * row_number
     aliens.add(alien)
 
-def create_fleet(ai_settings, screen, ship, aliens):
-    alien = Alien(ai_settings, screen)
-    number_aliens_x = get_number_aliens_x(ai_settings, alien.rect.width)
-    number_rows = get_number_rows(ai_settings, ship.rect.height,
-    alien.rect.height)
-    for row_number in range(number_rows):
-        for alien_number in range(number_aliens_x):
-            create_alien(ai_settings, screen, aliens, alien_number, row_number)
+
+
+def create_boss(ai_settings, screen, aliens, alien_number, row_number):
+    alien = Boss(ai_settings, screen)
+    alien_width = alien.rect.width
+    alien.x = alien_width + 2 * alien_width * alien_number
+    alien.rect.x = alien.x
+    alien.rect.y = alien.rect.height + 2 * alien.rect.height * row_number
+    aliens.add(alien)
+
+def create_fleet(ai_settings, screen, ship, aliens, stats):
+    gs = GameStats(ai_settings)
+    aliens.empty() 
+    
+    if stats.level == 8:  
+        boss = Boss(ai_settings, screen)
+        # Размещаем босса по центру экрана
+        boss.rect.centerx = screen.get_rect().centerx
+        boss.rect.top = 100  # Отступ сверху
+        boss.x = float(boss.rect.x)  # Обновляем координату x для плавного движения
+        aliens.add(boss)  # Добавляем босса в группу aliens
+    else:
+        # Обычные пришельцы для других уровней
+        alien = Alien(ai_settings, screen)
+        number_aliens_x = get_number_aliens_x(ai_settings, alien.rect.width)
+        number_rows = get_number_rows(ai_settings, ship.rect.height, alien.rect.height)
+        
+        for row_number in range(number_rows):
+            for alien_number in range(number_aliens_x):
+                create_alien(ai_settings, screen, aliens, alien_number, row_number)
 
 
 def update_screen(ai_settings, screen, stats, sb, ship, aliens, bullets, play_button):
-    screen.fill(ai_settings.bg_color)
     for bullet in bullets.sprites():
         bullet.draw_bullet()
     ship.blitme()
     aliens.draw(screen)
+    
     sb.show_score()
     
     if not stats.game_active:
         play_button.draw_button()
+
+    
     pygame.display.flip()
 
 
@@ -140,7 +166,7 @@ def check_play_button(ai_settings, screen, stats, sb, play_button, ship, aliens,
         aliens.empty()
         bullets.empty()
         
-        create_fleet(ai_settings, screen, ship, aliens)
+        create_fleet(ai_settings, screen, ship, aliens, stats)
         ship.center_ship()
 
 
@@ -152,18 +178,32 @@ def update_bullets(ai_settings, screen, stats, sb, ship, aliens, bullets):
     bullets.update()
 
 def check_bullet_alien_collisions(ai_settings, screen, stats, sb, ship, aliens, bullets):
-    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, False)
+    
     if collisions:
-        for aliens in collisions.values():
-            stats.score += ai_settings.alien_points * len(aliens)
-        sb.prep_score()
-        check_high_score(stats, sb)
-    if len(aliens) == 0:
+        for alien_list in collisions.values():
+            for alien in alien_list:
+                if isinstance(alien, Boss):
+                    if alien.hit():
+                        stats.score += ai_settings.boss_points
+                        sb.prep_score()
+                        check_high_score(stats, sb)
+                        aliens.remove(alien)
+                        # Завершаем игру после победы над боссом
+                        stats.game_active = False
+                        pygame.mouse.set_visible(True)
+                else:
+                    stats.score += ai_settings.alien_points
+                    aliens.remove(alien)
+                    sb.prep_score()
+                    check_high_score(stats, sb)
+    
+    if len(aliens) == 0 and stats.game_active:  
         bullets.empty()
         ai_settings.increase_speed()
         stats.level += 1
         sb.prep_level()
-        create_fleet(ai_settings, screen, ship, aliens)
+        create_fleet(ai_settings, screen, ship, aliens, stats)
     
 def check_high_score(stats, sb):
     if stats.score > stats.high_score:
